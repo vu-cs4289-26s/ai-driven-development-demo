@@ -1,6 +1,15 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import { createGrid, findPath, renderPath } from "./pathfinder.js";
+import {
+  randomInt,
+  randomWalls,
+  buildGrid,
+  referenceBFS,
+  generateSolvableScenario,
+  generateUnsolvableScenario,
+  describeScenario,
+} from "./test-generator.js";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -14,164 +23,99 @@ function isAdjacent(a, b) {
 }
 
 /** Validate that a path is legal on the given grid. */
-function assertValidPath(grid, path, start, end) {
-  assert.ok(path.length > 0, "Path should not be empty");
+function assertValidPath(grid, path, start, end, context = "") {
+  const ctx = context ? ` | ${context}` : "";
+  assert.ok(path.length > 0, `Path should not be empty${ctx}`);
 
-  // Starts at start
-  assert.deepEqual(path[0], start, "Path should start at the start position");
-
-  // Ends at end
+  assert.deepEqual(
+    path[0],
+    start,
+    `Path should start at [${start}]${ctx}`
+  );
   assert.deepEqual(
     path[path.length - 1],
     end,
-    "Path should end at the end position"
+    `Path should end at [${end}]${ctx}`
   );
 
   for (let i = 0; i < path.length; i++) {
     const [r, c] = path[i];
-
-    // Within bounds
     assert.ok(
       r >= 0 && r < grid.length && c >= 0 && c < grid[0].length,
-      `Path position [${r}, ${c}] is out of bounds`
+      `Path position [${r},${c}] is out of bounds${ctx}`
     );
-
-    // Not on a wall
-    assert.equal(grid[r][c], 0, `Path passes through wall at [${r}, ${c}]`);
-
-    // Each step is adjacent to the previous
+    assert.equal(
+      grid[r][c],
+      0,
+      `Path passes through wall at [${r},${c}]${ctx}`
+    );
     if (i > 0) {
       assert.ok(
         isAdjacent(path[i - 1], path[i]),
-        `Path steps [${path[i - 1]}] -> [${path[i]}] are not adjacent`
+        `Steps [${path[i - 1]}] → [${path[i]}] are not adjacent${ctx}`
       );
     }
   }
 }
 
 /**
- * Run BFS ourselves (cardinal-only) to compute the known optimal path length.
- * Returns the path length (# of cells including start and end), or 0 if blocked.
+ * Parse a renderPath output string into a 2-D character array.
+ * Each row is split by whitespace so "S # ." becomes ["S", "#", "."].
  */
-function bfsOptimalLength4Dir(grid, start, end) {
-  const rows = grid.length;
-  const cols = grid[0].length;
-  if (start[0] === end[0] && start[1] === end[1]) return 1;
-  const visited = Array.from({ length: rows }, () => Array(cols).fill(false));
-  const dist = Array.from({ length: rows }, () => Array(cols).fill(-1));
-  visited[start[0]][start[1]] = true;
-  dist[start[0]][start[1]] = 1;
-  const queue = [start];
-  const dirs = [[-1, 0], [1, 0], [0, -1], [0, 1]];
-  while (queue.length > 0) {
-    const [r, c] = queue.shift();
-    for (const [dr, dc] of dirs) {
-      const nr = r + dr;
-      const nc = c + dc;
-      if (nr < 0 || nr >= rows || nc < 0 || nc >= cols) continue;
-      if (visited[nr][nc] || grid[nr][nc] === 1) continue;
-      visited[nr][nc] = true;
-      dist[nr][nc] = dist[r][c] + 1;
-      if (nr === end[0] && nc === end[1]) return dist[nr][nc];
-      queue.push([nr, nc]);
-    }
-  }
-  return 0;
+function parseRendered(output) {
+  return output
+    .trim()
+    .split("\n")
+    .map((line) => line.trim().split(/\s+/));
 }
 
+// =========================================================================
+//  STATIC SMOKE TESTS
+//  A handful of deterministic tests that verify basic contract & edge cases.
+// =========================================================================
+
 // ---------------------------------------------------------------------------
-// createGrid
+// createGrid — smoke
 // ---------------------------------------------------------------------------
 
-describe("createGrid", () => {
+describe("createGrid — smoke tests", () => {
   it("creates a grid with the correct number of rows and columns", () => {
     const grid = createGrid(3, 4);
     assert.equal(grid.length, 3);
-    for (const row of grid) {
-      assert.equal(row.length, 4);
-    }
+    for (const row of grid) assert.equal(row.length, 4);
   });
 
   it("initializes all cells as walkable (0) when no walls are given", () => {
     const grid = createGrid(2, 3);
     for (const row of grid) {
-      for (const cell of row) {
-        assert.equal(cell, 0);
-      }
+      for (const cell of row) assert.equal(cell, 0);
     }
   });
 
   it("places walls at the specified positions", () => {
-    const walls = [
+    const grid = createGrid(3, 3, [
       [0, 1],
       [2, 0],
-    ];
-    const grid = createGrid(3, 3, walls);
+    ]);
     assert.equal(grid[0][1], 1);
     assert.equal(grid[2][0], 1);
     assert.equal(grid[0][0], 0);
     assert.equal(grid[1][1], 0);
   });
 
-  it("handles an empty walls array", () => {
-    const grid = createGrid(2, 2, []);
-    assert.equal(grid[0][0], 0);
-    assert.equal(grid[1][1], 0);
-  });
-
-  it("creates a 1x1 grid", () => {
+  it("creates a 1×1 grid", () => {
     const grid = createGrid(1, 1);
     assert.equal(grid.length, 1);
     assert.equal(grid[0].length, 1);
     assert.equal(grid[0][0], 0);
   });
-
-  it("rows are independent — mutating one does not affect another", () => {
-    const grid = createGrid(3, 3);
-    grid[0][0] = 1;
-    assert.equal(grid[1][0], 0, "Row 1 should be unaffected by mutating row 0");
-    assert.equal(grid[2][0], 0, "Row 2 should be unaffected by mutating row 0");
-  });
-
-  it("creates a large grid with correct dimensions and wall placement", () => {
-    const walls = [];
-    for (let r = 0; r < 100; r++) {
-      walls.push([r, 50]); // wall column down the middle
-    }
-    const grid = createGrid(100, 100, walls);
-    assert.equal(grid.length, 100);
-    assert.equal(grid[0].length, 100);
-    // Verify all walls placed
-    for (let r = 0; r < 100; r++) {
-      assert.equal(grid[r][50], 1, `Wall missing at [${r}, 50]`);
-      assert.equal(grid[r][49], 0, `Cell [${r}, 49] should be walkable`);
-      assert.equal(grid[r][51], 0, `Cell [${r}, 51] should be walkable`);
-    }
-  });
-
-  it("places many walls on a dense grid", () => {
-    // Fill nearly every cell as a wall
-    const walls = [];
-    for (let r = 0; r < 5; r++) {
-      for (let c = 0; c < 5; c++) {
-        if (!(r === 0 && c === 0) && !(r === 4 && c === 4)) {
-          walls.push([r, c]);
-        }
-      }
-    }
-    const grid = createGrid(5, 5, walls);
-    assert.equal(grid[0][0], 0, "Start corner should be walkable");
-    assert.equal(grid[4][4], 0, "End corner should be walkable");
-    assert.equal(grid[2][2], 1, "Center should be a wall");
-    assert.equal(grid[0][1], 1);
-  });
 });
 
 // ---------------------------------------------------------------------------
-// findPath
+// findPath — smoke
 // ---------------------------------------------------------------------------
 
-describe("findPath", () => {
+describe("findPath — smoke tests", () => {
   it("finds a path on a wide-open grid", () => {
     const grid = createGrid(3, 3);
     const path = findPath(grid, [0, 0], [2, 2]);
@@ -179,9 +123,6 @@ describe("findPath", () => {
   });
 
   it("finds a path around obstacles", () => {
-    // . # .
-    // . # .
-    // . . .
     const grid = createGrid(3, 3, [
       [0, 1],
       [1, 1],
@@ -191,7 +132,6 @@ describe("findPath", () => {
   });
 
   it("returns an empty array when no path exists", () => {
-    // Wall completely blocks left from right
     const grid = createGrid(3, 3, [
       [0, 1],
       [1, 1],
@@ -199,7 +139,7 @@ describe("findPath", () => {
     ]);
     const path = findPath(grid, [0, 0], [0, 2]);
     assert.ok(Array.isArray(path), "Should return an array");
-    assert.equal(path.length, 0, "Should return an empty array when blocked");
+    assert.equal(path.length, 0, "Should return empty when blocked");
   });
 
   it("returns a single-element path when start equals end", () => {
@@ -210,351 +150,31 @@ describe("findPath", () => {
     assert.deepEqual(path[0], [1, 1]);
   });
 
-  it("finds the optimal path in a straight corridor", () => {
-    const grid = createGrid(1, 5);
-    const path = findPath(grid, [0, 0], [0, 4]);
-    assertValidPath(grid, path, [0, 0], [0, 4]);
-    assert.equal(path.length, 5, "Straight corridor path should be 5 cells");
-  });
-
-  it("navigates a maze-like grid", () => {
-    // 5x5 with a serpentine wall pattern
-    // . . . . .
-    // # # # # .
-    // . . . . .
-    // . # # # #
-    // . . . . .
-    const walls = [
-      [1, 0], [1, 1], [1, 2], [1, 3],
-      [3, 1], [3, 2], [3, 3], [3, 4],
-    ];
-    const grid = createGrid(5, 5, walls);
-    const path = findPath(grid, [0, 0], [4, 4]);
-    assertValidPath(grid, path, [0, 0], [4, 4]);
-  });
-
-  it("works when start and end are adjacent", () => {
-    const grid = createGrid(2, 2);
-    const path = findPath(grid, [0, 0], [0, 1]);
-    assertValidPath(grid, path, [0, 0], [0, 1]);
-    assert.equal(path.length, 2);
-  });
-
-  // --- New: optimality tests ---
-
-  it("finds the optimal path on a 10x10 open grid (cardinal)", () => {
-    // Cardinal-only shortest from [0,0] to [9,9] = 19 steps (9 down + 9 right + 1 for start)
-    const grid = createGrid(10, 10);
-    const path = findPath(grid, [0, 0], [9, 9]);
-    assertValidPath(grid, path, [0, 0], [9, 9]);
-    // Must be at most 19 (cardinal optimal). If diagonal, could be 10.
-    assert.ok(
-      path.length <= 19,
-      `Path is longer than cardinal optimal: ${path.length}`
-    );
-  });
-
-  it("returns optimal path length on serpentine maze", () => {
-    // The serpentine forces a specific route length
-    const walls = [
-      [1, 0], [1, 1], [1, 2], [1, 3],
-      [3, 1], [3, 2], [3, 3], [3, 4],
-    ];
-    const grid = createGrid(5, 5, walls);
-    const path = findPath(grid, [0, 0], [4, 4]);
-    assertValidPath(grid, path, [0, 0], [4, 4]);
-    const optimal = bfsOptimalLength4Dir(grid, [0, 0], [4, 4]);
-    // If they use diagonal, path may be shorter than cardinal optimal, but must still be valid
-    assert.ok(
-      path.length <= optimal,
-      `Path (${path.length}) is longer than cardinal BFS optimal (${optimal})`
-    );
-  });
-
-  // --- New: boundary & edge tests ---
-
-  it("navigates a vertical corridor (tall narrow grid)", () => {
-    // 10x1 grid — only one path: straight down
-    const grid = createGrid(10, 1);
-    const path = findPath(grid, [0, 0], [9, 0]);
-    assertValidPath(grid, path, [0, 0], [9, 0]);
-    assert.equal(path.length, 10, "10x1 corridor path should be 10 cells");
-  });
-
-  it("navigates a horizontal corridor (wide flat grid)", () => {
-    // 1x20 grid
-    const grid = createGrid(1, 20);
-    const path = findPath(grid, [0, 0], [0, 19]);
-    assertValidPath(grid, path, [0, 0], [0, 19]);
-    assert.equal(path.length, 20, "1x20 corridor path should be 20 cells");
-  });
-
-  it("finds path from corner to corner on a large open grid", () => {
-    const grid = createGrid(20, 20);
-    const path = findPath(grid, [0, 0], [19, 19]);
-    assertValidPath(grid, path, [0, 0], [19, 19]);
-  });
-
-  it("handles start and end on the grid boundary (edges)", () => {
-    const grid = createGrid(5, 5);
-    // Top-right to bottom-left
-    const path = findPath(grid, [0, 4], [4, 0]);
-    assertValidPath(grid, path, [0, 4], [4, 0]);
-  });
-
-  // --- New: tricky wall configurations ---
-
-  it("finds path when immediate neighbor of start is walled off", () => {
-    // End is 1 cell to the right, but a wall blocks the direct path
-    // S # E
-    // . . .
-    const grid = createGrid(2, 3, [[0, 1]]);
-    const path = findPath(grid, [0, 0], [0, 2]);
-    assertValidPath(grid, path, [0, 0], [0, 2]);
-    // Must go around: [0,0] → [1,0] → [1,1] → [1,2] → [0,2] (or via diagonal)
-    assert.ok(path.length >= 3, "Path must go around the wall");
-  });
-
-  it("navigates a single-cell-wide winding corridor", () => {
-    // A forced winding path through a 5x5 grid:
-    // S # . . .
-    // . # . # .
-    // . . . # .
-    // . # # # .
-    // . . . . E
-    const walls = [
-      [0, 1],
-      [1, 1], [1, 3],
-      [2, 3],
-      [3, 1], [3, 2], [3, 3],
-    ];
-    const grid = createGrid(5, 5, walls);
-    const path = findPath(grid, [0, 0], [4, 4]);
-    assertValidPath(grid, path, [0, 0], [4, 4]);
-  });
-
-  it("returns empty array when start is surrounded by walls", () => {
-    // . # .
-    // # S #
-    // . # .
-    // (S is at [1,1], completely boxed in for cardinal movement)
-    const walls = [
-      [0, 1],
-      [1, 0], [1, 2],
-      [2, 1],
-    ];
-    const grid = createGrid(3, 3, walls);
-    const path = findPath(grid, [1, 1], [0, 0]);
-    // For cardinal movement, start is boxed in → no path
-    // For diagonal, [1,1] → [0,0] is valid (diagonal, no wall at [0,0])
-    // So we just verify it's either empty or valid
-    if (path.length > 0) {
-      assertValidPath(grid, path, [1, 1], [0, 0]);
-    } else {
-      assert.equal(path.length, 0);
-    }
-  });
-
-  it("handles a grid where the only path goes along the perimeter", () => {
-    // 4x4 grid, entire interior is walled off
-    // . . . .
-    // . # # .
-    // . # # .
-    // . . . .
-    const walls = [
-      [1, 1], [1, 2],
-      [2, 1], [2, 2],
-    ];
-    const grid = createGrid(4, 4, walls);
-    const path = findPath(grid, [0, 0], [3, 3]);
-    assertValidPath(grid, path, [0, 0], [3, 3]);
-    // No cell in the path should be interior
-    for (const [r, c] of path) {
-      assert.equal(grid[r][c], 0, `Path goes through wall at [${r}, ${c}]`);
-    }
-  });
-
-  it("returns empty array for completely walled grid (except start and end)", () => {
-    // 3x3 grid, everything is a wall except [0,0] and [2,2]
-    const walls = [
-      [0, 1], [0, 2],
-      [1, 0], [1, 1], [1, 2],
-      [2, 0], [2, 1],
-    ];
-    const grid = createGrid(3, 3, walls);
-    const path = findPath(grid, [0, 0], [2, 2]);
-    assert.ok(Array.isArray(path));
-    assert.equal(path.length, 0, "Should be blocked — no passable route");
-  });
-
-  it("handles dense obstacle field with a thin passable route", () => {
-    // 7x7 grid, walls everywhere except a thin L-shaped corridor
-    // S . # # # # #
-    // # . # # # # #
-    // # . # # # # #
-    // # . . . . . .
-    // # # # # # # .
-    // # # # # # # .
-    // # # # # # # E
-    const walls = [];
-    for (let r = 0; r < 7; r++) {
-      for (let c = 0; c < 7; c++) {
-        walls.push([r, c]);
-      }
-    }
-    // Carve the corridor
-    const corridor = [
-      [0, 0], [0, 1],
-      [1, 1], [2, 1],
-      [3, 1], [3, 2], [3, 3], [3, 4], [3, 5], [3, 6],
-      [4, 6], [5, 6], [6, 6],
-    ];
-    const corridorSet = new Set(corridor.map(([r, c]) => `${r},${c}`));
-    const actualWalls = walls.filter(([r, c]) => !corridorSet.has(`${r},${c}`));
-    const grid = createGrid(7, 7, actualWalls);
-
-    const path = findPath(grid, [0, 0], [6, 6]);
-    assertValidPath(grid, path, [0, 0], [6, 6]);
-    // Verify no path step is on a wall
-    for (const [r, c] of path) {
-      assert.equal(grid[r][c], 0, `Path passes through wall at [${r}, ${c}]`);
-    }
-    // Optimal cardinal length through this corridor is 13
-    assert.ok(
-      path.length <= 13,
-      `Path (${path.length}) is longer than expected for the carved corridor`
-    );
-  });
-
-  it("finds path on a large 50x50 grid with wall barriers", () => {
-    // Two horizontal barriers with gaps at opposite ends
-    const walls = [];
-    for (let c = 0; c < 49; c++) walls.push([15, c]); // gap at col 49
-    for (let c = 1; c < 50; c++) walls.push([35, c]); // gap at col 0
-    const grid = createGrid(50, 50, walls);
-    const path = findPath(grid, [0, 0], [49, 49]);
-    assertValidPath(grid, path, [0, 0], [49, 49]);
-  });
-
-  it("path contains no duplicate positions", () => {
-    const grid = createGrid(5, 5, [[1, 1], [1, 2], [2, 3]]);
-    const path = findPath(grid, [0, 0], [4, 4]);
-    assertValidPath(grid, path, [0, 0], [4, 4]);
-    const seen = new Set();
-    for (const [r, c] of path) {
-      const key = `${r},${c}`;
-      assert.ok(!seen.has(key), `Duplicate position in path: [${r}, ${c}]`);
-      seen.add(key);
-    }
-  });
-
-  it("returns path as an array of arrays (not objects or flat)", () => {
+  it("returns path as array of [row, col] arrays", () => {
     const grid = createGrid(3, 3);
     const path = findPath(grid, [0, 0], [2, 2]);
-    assert.ok(Array.isArray(path), "Path should be an array");
+    assert.ok(Array.isArray(path));
     for (const step of path) {
-      assert.ok(Array.isArray(step), `Each step should be an array, got: ${typeof step}`);
-      assert.equal(step.length, 2, `Each step should have 2 elements [row, col]`);
+      assert.ok(Array.isArray(step), `Step should be array, got ${typeof step}`);
+      assert.equal(step.length, 2);
       assert.equal(typeof step[0], "number");
       assert.equal(typeof step[1], "number");
     }
   });
-
-  it("finds correct path on asymmetric rectangular grid", () => {
-    // 3 rows, 8 cols, wall in the middle row
-    // . . . . . . . .
-    // # # # . # # # #
-    // . . . . . . . .
-    const walls = [
-      [1, 0], [1, 1], [1, 2],
-      [1, 4], [1, 5], [1, 6], [1, 7],
-    ];
-    const grid = createGrid(3, 8, walls);
-    const path = findPath(grid, [0, 0], [2, 7]);
-    assertValidPath(grid, path, [0, 0], [2, 7]);
-    // Must go through the gap at [1,3]
-    const passesGap = path.some(([r, c]) => r === 1 && c === 3);
-    assert.ok(passesGap, "Path should pass through the gap at [1, 3]");
-  });
 });
 
 // ---------------------------------------------------------------------------
-// renderPath
+// renderPath — smoke
 // ---------------------------------------------------------------------------
 
-describe("renderPath", () => {
+describe("renderPath — smoke tests", () => {
   it("returns a string", () => {
     const grid = createGrid(2, 2);
     const result = renderPath(grid, [[0, 0]], [0, 0], [0, 0]);
     assert.equal(typeof result, "string");
   });
 
-  it("marks the start position with S", () => {
-    const grid = createGrid(2, 2);
-    const path = [
-      [0, 0],
-      [1, 1],
-    ];
-    const result = renderPath(grid, path, [0, 0], [1, 1]);
-    assert.ok(result.includes("S"), "Output should contain S for start");
-  });
-
-  it("marks the end position with E", () => {
-    const grid = createGrid(2, 2);
-    const path = [
-      [0, 0],
-      [1, 1],
-    ];
-    const result = renderPath(grid, path, [0, 0], [1, 1]);
-    assert.ok(result.includes("E"), "Output should contain E for end");
-  });
-
-  it("marks walls with #", () => {
-    const grid = createGrid(2, 2, [[0, 1]]);
-    const path = [
-      [0, 0],
-      [1, 0],
-      [1, 1],
-    ];
-    const result = renderPath(grid, path, [0, 0], [1, 1]);
-    assert.ok(result.includes("#"), "Output should contain # for walls");
-  });
-
-  it("marks path cells with *", () => {
-    const grid = createGrid(1, 3);
-    const path = [
-      [0, 0],
-      [0, 1],
-      [0, 2],
-    ];
-    const result = renderPath(grid, path, [0, 0], [0, 2]);
-    assert.ok(result.includes("*"), "Output should contain * for path cells");
-  });
-
-  it("has the correct number of lines for the grid", () => {
-    const grid = createGrid(4, 3);
-    const result = renderPath(grid, [[0, 0]], [0, 0], [0, 0]);
-    const lines = result.trim().split("\n");
-    assert.equal(lines.length, 4, `Expected 4 lines, got ${lines.length}`);
-  });
-
-  it("marks empty walkable cells with .", () => {
-    const grid = createGrid(2, 2);
-    const path = [
-      [0, 0],
-      [0, 1],
-    ];
-    const result = renderPath(grid, path, [0, 0], [0, 1]);
-    assert.ok(
-      result.includes("."),
-      "Output should contain . for empty walkable cells"
-    );
-  });
-
-  // --- New: exact string match ---
-
   it("produces exact expected output for a known small grid", () => {
-    // 3x3, wall at [0,1], path: [0,0] → [1,0] → [2,0] → [2,1] → [2,2]
     const grid = createGrid(3, 3, [[0, 1]]);
     const path = [
       [0, 0],
@@ -565,65 +185,31 @@ describe("renderPath", () => {
     ];
     const result = renderPath(grid, path, [0, 0], [2, 2]);
     const lines = result.trim().split("\n").map((l) => l.trim());
-    // Row 0: S=start, #=wall, .=empty
     assert.equal(lines[0], "S # .");
-    // Row 1: *=path, .=empty, .=empty
     assert.equal(lines[1], "* . .");
-    // Row 2: *=path, *=path, E=end
     assert.equal(lines[2], "* * E");
   });
 
-  it("renders empty path correctly (no * markers) on blocked grid", () => {
-    // Grid is fully blocked, no path
+  it("has the correct number of lines for the grid", () => {
+    const grid = createGrid(4, 3);
+    const result = renderPath(grid, [[0, 0]], [0, 0], [0, 0]);
+    const lines = result.trim().split("\n");
+    assert.equal(lines.length, 4);
+  });
+
+  it("renders empty path correctly — no * markers", () => {
     const grid = createGrid(3, 3, [
       [0, 1],
       [1, 1],
       [2, 1],
     ]);
-    const emptyPath = [];
-    const result = renderPath(grid, emptyPath, [0, 0], [0, 2]);
-    // Should still render the grid with S and E but no * markers
-    assert.ok(result.includes("S"), "Should show start even with empty path");
-    assert.ok(result.includes("E"), "Should show end even with empty path");
-    assert.ok(!result.includes("*"), "Should have no path markers when path is empty");
+    const result = renderPath(grid, [], [0, 0], [0, 2]);
+    assert.ok(result.includes("S"), "Should show start");
+    assert.ok(result.includes("E"), "Should show end");
+    assert.ok(!result.includes("*"), "No path markers when path is empty");
   });
 
-  it("renders single-cell grid where start equals end", () => {
-    const grid = createGrid(1, 1);
-    const path = [[0, 0]];
-    const result = renderPath(grid, path, [0, 0], [0, 0]);
-    const trimmed = result.trim();
-    // Should show S (start takes priority when start === end)
-    assert.ok(
-      trimmed === "S" || trimmed === "E",
-      `Single cell should be S or E, got: "${trimmed}"`
-    );
-  });
-
-  it("renders a larger grid with all cell types present", () => {
-    // 3x4 grid with walls, path, empty cells, start, end
-    // S * . #
-    // . * # .
-    // . * * E
-    const grid = createGrid(3, 4, [[0, 3], [1, 2]]);
-    const path = [
-      [0, 0], [0, 1],
-      [1, 1],
-      [2, 1], [2, 2], [2, 3],
-    ];
-    const result = renderPath(grid, path, [0, 0], [2, 3]);
-    assert.ok(result.includes("S"), "Missing start marker");
-    assert.ok(result.includes("E"), "Missing end marker");
-    assert.ok(result.includes("*"), "Missing path markers");
-    assert.ok(result.includes("#"), "Missing wall markers");
-    assert.ok(result.includes("."), "Missing empty cell markers");
-    const lines = result.trim().split("\n");
-    assert.equal(lines.length, 3, "Should have 3 rows");
-  });
-
-  // --- New: end-to-end pipeline ---
-
-  it("end-to-end: createGrid → findPath → renderPath produces valid output", () => {
+  it("end-to-end: createGrid → findPath → renderPath", () => {
     const grid = createGrid(5, 5, [
       [1, 0], [1, 1], [1, 2], [1, 3],
       [3, 1], [3, 2], [3, 3], [3, 4],
@@ -633,48 +219,311 @@ describe("renderPath", () => {
 
     const rendered = renderPath(grid, path, [0, 0], [4, 4]);
     assert.equal(typeof rendered, "string");
-
     const lines = rendered.trim().split("\n");
-    assert.equal(lines.length, 5, "Rendered output should have 5 rows");
-
-    // First character of first line should be S
-    assert.ok(lines[0].trim().startsWith("S"), "First cell should be S");
-    // Last character of last line should be E
-    assert.ok(lines[4].trim().endsWith("E"), "Last cell should be E");
-
-    // Count characters
-    assert.ok(rendered.includes("#"), "Rendered output should show walls");
-    assert.ok(rendered.includes("*"), "Rendered output should show path");
+    assert.equal(lines.length, 5);
+    assert.ok(lines[0].trim().startsWith("S"));
+    assert.ok(lines[4].trim().endsWith("E"));
+    assert.ok(rendered.includes("#"));
+    assert.ok(rendered.includes("*"));
   });
+});
 
-  it("end-to-end: blocked path renders grid without path markers", () => {
-    const grid = createGrid(3, 3, [
-      [0, 1],
-      [1, 1],
-      [2, 1],
-    ]);
-    const path = findPath(grid, [0, 0], [0, 2]);
-    assert.equal(path.length, 0, "Path should be empty (blocked)");
+// =========================================================================
+//  DYNAMIC TESTS — randomly generated at runtime
+//  New grids, wall layouts, and start/end positions every run.
+// =========================================================================
 
-    const rendered = renderPath(grid, path, [0, 0], [0, 2]);
-    assert.ok(rendered.includes("S"), "Should still render start");
-    assert.ok(rendered.includes("E"), "Should still render end");
-    assert.ok(!rendered.includes("*"), "No path markers when blocked");
-    assert.ok(rendered.includes("#"), "Should render walls");
-  });
+const DYNAMIC_COUNT = 20;
 
-  it("end-to-end: single cell where start equals end", () => {
-    const grid = createGrid(3, 3);
-    const path = findPath(grid, [1, 1], [1, 1]);
-    assert.equal(path.length, 1);
+// ---------------------------------------------------------------------------
+// createGrid — dynamic (20 tests)
+// ---------------------------------------------------------------------------
 
-    const rendered = renderPath(grid, path, [1, 1], [1, 1]);
-    const lines = rendered.trim().split("\n");
-    assert.equal(lines.length, 3);
-    // The center cell should be S (or E), surrounded by dots
-    assert.ok(
-      rendered.includes("S") || rendered.includes("E"),
-      "Center cell should be marked"
-    );
-  });
+describe("createGrid — dynamic", () => {
+  for (let i = 0; i < DYNAMIC_COUNT; i++) {
+    // Mix of sizes: mostly small/medium, a few larger
+    const rows = i < 15 ? randomInt(2, 100) : randomInt(100, 300);
+    const cols = i < 15 ? randomInt(2, 100) : randomInt(100, 300);
+    const density = Math.random() * 0.5;
+    const walls = randomWalls(rows, cols, density);
+
+    it(`[${i + 1}/${DYNAMIC_COUNT}] ${rows}×${cols} grid, ${walls.length} walls`, () => {
+      const grid = createGrid(rows, cols, walls);
+
+      // --- Dimensions ---
+      assert.equal(grid.length, rows, `Expected ${rows} rows`);
+      for (let r = 0; r < rows; r++) {
+        assert.equal(grid[r].length, cols, `Row ${r}: expected ${cols} cols`);
+      }
+
+      // --- Wall placement & walkable cells ---
+      const wallSet = new Set(walls.map(([r, c]) => `${r},${c}`));
+      const mismatches = [];
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          const expected = wallSet.has(`${r},${c}`) ? 1 : 0;
+          if (grid[r][c] !== expected) {
+            mismatches.push({ r, c, got: grid[r][c], expected });
+          }
+        }
+      }
+      assert.equal(
+        mismatches.length,
+        0,
+        `${mismatches.length} cell(s) wrong: ${JSON.stringify(mismatches.slice(0, 5))}`
+      );
+
+      // --- Row independence (no shared array references) ---
+      if (rows >= 2) {
+        // Rows must be distinct objects — not aliased references
+        assert.notStrictEqual(grid[0], grid[1], "Rows should be independent arrays");
+        // Mutating one row must not affect another
+        const savedR0 = grid[0][0];
+        const savedR1 = grid[1][0];
+        grid[0][0] = savedR0 === 0 ? 99 : 0; // flip to a different value
+        assert.equal(
+          grid[1][0],
+          savedR1,
+          "Mutating row 0 should not affect row 1"
+        );
+        grid[0][0] = savedR0; // restore
+      }
+    });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// findPath — dynamic solvable (15 tests, including 3 × 1000×1000)
+// ---------------------------------------------------------------------------
+
+describe("findPath — dynamic solvable", () => {
+  const SOLVABLE_COUNT = 15;
+
+  const configs = [];
+  // 12 small/medium
+  for (let i = 0; i < 12; i++) {
+    configs.push({
+      rows: randomInt(5, 100),
+      cols: randomInt(5, 100),
+      density: Math.random() * 0.3,
+      label: "small/medium",
+    });
+  }
+  // 3 stress tests
+  for (let i = 0; i < 3; i++) {
+    configs.push({
+      rows: 1000,
+      cols: 1000,
+      density: 0.1 + Math.random() * 0.15,
+      label: "stress 1000×1000",
+    });
+  }
+
+  for (let i = 0; i < configs.length; i++) {
+    const { rows, cols, density, label } = configs[i];
+
+    it(`[${i + 1}/${SOLVABLE_COUNT}] ${label}: ${rows}×${cols}, ~${(density * 100).toFixed(0)}% walls`, () => {
+      const scenario = generateSolvableScenario(rows, cols, density);
+      const { grid, start, end, optimalPath } = scenario;
+
+      const path = findPath(grid, start, end);
+      const ctx = describeScenario(scenario);
+
+      // Must be a valid path
+      assertValidPath(grid, path, start, end, ctx);
+
+      // Must be optimal (no longer than reference BFS)
+      assert.ok(
+        path.length <= optimalPath.length,
+        `Path length ${path.length} exceeds optimal ${optimalPath.length} | ${ctx}`
+      );
+
+      // No duplicate positions
+      const seen = new Set();
+      for (const [r, c] of path) {
+        const key = `${r},${c}`;
+        assert.ok(!seen.has(key), `Duplicate position [${r},${c}] | ${ctx}`);
+        seen.add(key);
+      }
+    });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// findPath — dynamic unsolvable (5 tests)
+// ---------------------------------------------------------------------------
+
+describe("findPath — dynamic unsolvable", () => {
+  const UNSOLVABLE_COUNT = 5;
+
+  for (let i = 0; i < UNSOLVABLE_COUNT; i++) {
+    const rows = randomInt(5, 50);
+    const cols = randomInt(5, 50);
+
+    it(`[${i + 1}/${UNSOLVABLE_COUNT}] blocked ${rows}×${cols}`, () => {
+      const scenario = generateUnsolvableScenario(rows, cols);
+      const { grid, start, end } = scenario;
+      const ctx = describeScenario(scenario);
+
+      const path = findPath(grid, start, end);
+
+      assert.ok(Array.isArray(path), `Should return an array | ${ctx}`);
+      assert.equal(path.length, 0, `Should return [] when blocked | ${ctx}`);
+    });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// renderPath — dynamic solvable (15 tests)
+// ---------------------------------------------------------------------------
+
+describe("renderPath — dynamic solvable", () => {
+  const RENDER_SOLVABLE = 15;
+
+  for (let i = 0; i < RENDER_SOLVABLE; i++) {
+    const rows = randomInt(3, 30);
+    const cols = randomInt(3, 30);
+
+    it(`[${i + 1}/${RENDER_SOLVABLE}] rendered ${rows}×${cols} with path`, () => {
+      const scenario = generateSolvableScenario(rows, cols, Math.random() * 0.3);
+      const { grid, start, end, optimalPath } = scenario;
+      const ctx = describeScenario(scenario);
+
+      const output = renderPath(grid, optimalPath, start, end);
+      const chars = parseRendered(output);
+
+      // Correct number of lines
+      assert.equal(chars.length, rows, `Expected ${rows} rows | ${ctx}`);
+
+      // Each line has correct column count
+      for (let r = 0; r < rows; r++) {
+        assert.equal(
+          chars[r].length,
+          cols,
+          `Row ${r}: expected ${cols} cols, got ${chars[r].length} | ${ctx}`
+        );
+      }
+
+      // S at start
+      assert.equal(
+        chars[start[0]][start[1]],
+        "S",
+        `Expected S at [${start}] | ${ctx}`
+      );
+
+      // E at end (unless start == end, then S takes priority)
+      if (start[0] !== end[0] || start[1] !== end[1]) {
+        assert.equal(
+          chars[end[0]][end[1]],
+          "E",
+          `Expected E at [${end}] | ${ctx}`
+        );
+      }
+
+      // Walls are #
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          if (grid[r][c] === 1) {
+            // Wall cells that are not start/end should be #
+            const isStart = r === start[0] && c === start[1];
+            const isEnd = r === end[0] && c === end[1];
+            if (!isStart && !isEnd) {
+              assert.equal(
+                chars[r][c],
+                "#",
+                `Expected # at wall [${r},${c}] | ${ctx}`
+              );
+            }
+          }
+        }
+      }
+
+      // Path intermediate cells (not start/end) are *
+      const pathSet = new Set(optimalPath.map(([r, c]) => `${r},${c}`));
+      for (const [r, c] of optimalPath) {
+        const isStart = r === start[0] && c === start[1];
+        const isEnd = r === end[0] && c === end[1];
+        if (!isStart && !isEnd) {
+          assert.equal(
+            chars[r][c],
+            "*",
+            `Expected * at path cell [${r},${c}] | ${ctx}`
+          );
+        }
+      }
+
+      // Empty walkable cells (not on path, not wall, not start, not end) are .
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          const isStart = r === start[0] && c === start[1];
+          const isEnd = r === end[0] && c === end[1];
+          const isWall = grid[r][c] === 1;
+          const isPath = pathSet.has(`${r},${c}`);
+          if (!isStart && !isEnd && !isWall && !isPath) {
+            assert.equal(
+              chars[r][c],
+              ".",
+              `Expected . at empty cell [${r},${c}] | ${ctx}`
+            );
+          }
+        }
+      }
+
+      // Only valid characters
+      const validChars = new Set(["S", "E", "*", "#", "."]);
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          assert.ok(
+            validChars.has(chars[r][c]),
+            `Unexpected char '${chars[r][c]}' at [${r},${c}] | ${ctx}`
+          );
+        }
+      }
+    });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// renderPath — dynamic unsolvable (5 tests)
+// ---------------------------------------------------------------------------
+
+describe("renderPath — dynamic unsolvable", () => {
+  const RENDER_UNSOLVABLE = 5;
+
+  for (let i = 0; i < RENDER_UNSOLVABLE; i++) {
+    const rows = randomInt(5, 25);
+    const cols = randomInt(5, 25);
+
+    it(`[${i + 1}/${RENDER_UNSOLVABLE}] rendered ${rows}×${cols} blocked`, () => {
+      const scenario = generateUnsolvableScenario(rows, cols);
+      const { grid, start, end } = scenario;
+      const ctx = describeScenario(scenario);
+
+      const output = renderPath(grid, [], start, end);
+      const chars = parseRendered(output);
+
+      // Correct dimensions
+      assert.equal(chars.length, rows, `Expected ${rows} rows | ${ctx}`);
+      for (let r = 0; r < rows; r++) {
+        assert.equal(chars[r].length, cols, `Row ${r}: expected ${cols} cols | ${ctx}`);
+      }
+
+      // S at start, E at end
+      assert.equal(chars[start[0]][start[1]], "S", `Expected S at [${start}] | ${ctx}`);
+      if (start[0] !== end[0] || start[1] !== end[1]) {
+        assert.equal(chars[end[0]][end[1]], "E", `Expected E at [${end}] | ${ctx}`);
+      }
+
+      // No * markers (empty path)
+      for (let r = 0; r < rows; r++) {
+        for (let c = 0; c < cols; c++) {
+          assert.notEqual(
+            chars[r][c],
+            "*",
+            `Unexpected * at [${r},${c}] with empty path | ${ctx}`
+          );
+        }
+      }
+    });
+  }
 });
