@@ -7,11 +7,7 @@
  * @returns {number[][]} 2D array where 0 = walkable, 1 = wall
  */
 export function createGrid(rows, cols, walls = []) {
-  const grid = Array.from({ length: rows }, () => Array(cols).fill(0));
-  for (const [r, c] of walls) {
-    grid[r][c] = 1;
-  }
-  return grid;
+  // TODO: Implement
 }
 
 /**
@@ -24,59 +20,7 @@ export function createGrid(rows, cols, walls = []) {
  *                        or an empty array if no path exists
  */
 export function findPath(grid, start, end) {
-  const rows = grid.length;
-  const cols = grid[0].length;
-  const [sr, sc] = start;
-  const [er, ec] = end;
-
-  // Invalid input — out of bounds or on a wall
-  if (sr < 0 || sr >= rows || sc < 0 || sc >= cols) return [];
-  if (er < 0 || er >= rows || ec < 0 || ec >= cols) return [];
-  if (grid[sr][sc] === 1 || grid[er][ec] === 1) return [];
-
-  // Start equals end
-  if (sr === er && sc === ec) return [[sr, sc]];
-
-  // Cardinal directions: up, down, left, right
-  const dirs = [[-1, 0], [1, 0], [0, -1], [0, 1]];
-
-  const visited = Array.from({ length: rows }, () => Array(cols).fill(false));
-  const parent = Array.from({ length: rows }, () => Array(cols).fill(null));
-
-  visited[sr][sc] = true;
-  const queue = [[sr, sc]];
-
-  while (queue.length > 0) {
-    const [r, c] = queue.shift();
-
-    for (const [dr, dc] of dirs) {
-      const nr = r + dr;
-      const nc = c + dc;
-
-      if (nr < 0 || nr >= rows || nc < 0 || nc >= cols) continue;
-      if (visited[nr][nc]) continue;
-      if (grid[nr][nc] === 1) continue;
-
-      visited[nr][nc] = true;
-      parent[nr][nc] = [r, c];
-
-      if (nr === er && nc === ec) {
-        // Reconstruct path
-        const path = [[er, ec]];
-        let cur = [er, ec];
-        while (cur[0] !== sr || cur[1] !== sc) {
-          cur = parent[cur[0]][cur[1]];
-          path.push(cur);
-        }
-        path.reverse();
-        return path;
-      }
-
-      queue.push([nr, nc]);
-    }
-  }
-
-  return [];
+  // TODO: Implement
 }
 
 /**
@@ -96,21 +40,5 @@ export function findPath(grid, start, end) {
  * @returns {string} ASCII representation of the grid with the path marked
  */
 export function renderPath(grid, path, start, end) {
-  const pathSet = new Set(path.map(([r, c]) => `${r},${c}`));
-  const [sr, sc] = start;
-  const [er, ec] = end;
-
-  const lines = grid.map((row, r) =>
-    row
-      .map((cell, c) => {
-        if (r === sr && c === sc) return "S";
-        if (r === er && c === ec) return "E";
-        if (cell === 1) return "#";
-        if (pathSet.has(`${r},${c}`)) return "*";
-        return ".";
-      })
-      .join(" ")
-  );
-
-  return lines.join("\n");
+  // TODO: Implement
 }

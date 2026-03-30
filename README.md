@@ -111,7 +111,7 @@ What data structures would work best for the BFS queue and visited set on this g
 Look at the tests — are there any edge cases I should think about before we start coding?
 ```
 
-The agent will ask you about the **2 open design decisions** in the PRD. Answer them however you like — there are no wrong answers.
+The agent will ask you about the **2 open design decisions** in the PRD using the Ask Question tool (a multiple-choice prompt). Answer them however you like — there are no wrong answers.
 
 ### 3. Build It (Build Mode)
 
