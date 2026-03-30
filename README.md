@@ -8,7 +8,8 @@ A hands-on exercise demonstrating AI-driven development. You'll use an AI coding
 |---|---|
 | `PRD.md` | Product requirements describing what to build |
 | `pathfinder.js` | Function stubs — the agent will implement these |
-| `pathfinder.test.js` | Pre-written tests that the implementation must pass |
+| `pathfinder.test.js` | Static smoke tests + dynamically generated tests (different every run) |
+| `test-generator.js` | Runtime test scenario generator with a reference BFS oracle |
 | `package.json` | Run tests with `npm test` |
 
 ## Prerequisites
@@ -65,7 +66,7 @@ Select NVIDIA NIM as the provider and paste your API key when prompted.
 
 ```bash
 git clone <this-repo-url>
-cd pathfinder
+cd ai-driven-development-demo
 git checkout -b <your-name>/pathfinder
 ```
 
@@ -130,7 +131,7 @@ Pay attention to:
 npm test
 ```
 
-You should see all 19 tests pass.
+You should see all 75 tests pass (14 static + 60 dynamically generated).
 
 ### 6. Create a Pull Request
 
