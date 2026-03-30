@@ -11,7 +11,8 @@ The function signatures are already defined in `pathfinder.js` — your job is t
 | File | Purpose |
 |---|---|
 | `pathfinder.js` | Function stubs with JSDoc — implement these |
-| `pathfinder.test.js` | Pre-written tests — your implementation must pass these |
+| `pathfinder.test.js` | Static smoke tests + dynamically generated tests — your implementation must pass these |
+| `test-generator.js` | Runtime test scenario generator with a reference BFS oracle |
 | `package.json` | Run tests with `npm test` |
 
 ## Functions to Implement
