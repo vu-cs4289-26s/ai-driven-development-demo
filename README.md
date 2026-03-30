@@ -92,7 +92,8 @@ opencode
 
 OpenCode has two modes: **Plan** and **Build**. Press `Tab` to switch between them. Start in Plan mode and have the agent read the codebase and think through an approach before writing any code.
 
-> **Tip:** Use `@` to mention files directly in your prompt (e.g. `@PRD.md`, `@pathfinder.js`) so the agent loads them into context.
+> [!TIP]
+> Use `@` to mention files directly in your prompt (e.g. `@PRD.md`, `@pathfinder.js`) so the agent loads them into context.
 
 Example prompts for Plan mode:
 
