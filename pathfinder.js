@@ -7,7 +7,17 @@
  * @returns {number[][]} 2D array where 0 = walkable, 1 = wall
  */
 export function createGrid(rows, cols, walls = []) {
-  // TODO: Implement
+  const grid = [];
+  for (let r = 0; r < rows; r++) {
+    const row = new Array(cols).fill(0);
+    grid.push(row);
+  }
+  for (const [r, c] of walls) {
+    if (r >= 0 && r < rows && c >= 0 && c < cols) {
+      grid[r][c] = 1;
+    }
+  }
+  return grid;
 }
 
 /**
@@ -20,7 +30,51 @@ export function createGrid(rows, cols, walls = []) {
  *                        or an empty array if no path exists
  */
 export function findPath(grid, start, end) {
-  // TODO: Implement
+  const rows = grid.length;
+  const cols = grid[0].length;
+  const [sr, sc] = start;
+  const [er, ec] = end;
+
+  // Validation: return empty array for invalid inputs
+  if (sr < 0 || sr >= rows || sc < 0 || sc >= cols ||
+      er < 0 || er >= rows || ec < 0 || ec >= cols ||
+      grid[sr][sc] === 1 || grid[er][ec] === 1) {
+    return [];
+  }
+
+  // Edge case: start equals end
+  if (sr === er && sc === ec) {
+    return [[sr, sc]];
+  }
+
+  // BFS setup
+  const queue = [[sr, sc, [[sr, sc]]]];
+  const visited = new Set([`${sr},${sc}`]);
+  const directions = [[-1, 0], [1, 0], [0, -1], [0, 1]];
+
+  while (queue.length > 0) {
+    const [r, c, path] = queue.shift();
+
+    for (const [dr, dc] of directions) {
+      const nr = r + dr;
+      const nc = c + dc;
+      const key = `${nr},${nc}`;
+
+      if (nr >= 0 && nr < rows && nc >= 0 && nc < cols &&
+          grid[nr][nc] !== 1 && !visited.has(key)) {
+        const newPath = [...path, [nr, nc]];
+
+        if (nr === er && nc === ec) {
+          return newPath;
+        }
+
+        visited.add(key);
+        queue.push([nr, nc, newPath]);
+      }
+    }
+  }
+
+  return [];
 }
 
 /**
@@ -40,5 +94,40 @@ export function findPath(grid, start, end) {
  * @returns {string} ASCII representation of the grid with the path marked
  */
 export function renderPath(grid, path, start, end) {
-  // TODO: Implement
+  const rows = grid.length;
+  const cols = grid[0].length;
+  const [sr, sc] = start;
+  const [er, ec] = end;
+
+  // Create a Set of path positions for O(1) lookup
+  const pathSet = new Set();
+  for (const [r, c] of path) {
+    pathSet.add(`${r},${c}`);
+  }
+
+  const lines = [];
+  for (let r = 0; r < rows; r++) {
+    const row = [];
+    for (let c = 0; c < cols; c++) {
+      const isStart = r === sr && c === sc;
+      const isEnd = r === er && c === ec;
+      const isPath = pathSet.has(`${r},${c}`);
+      const isWall = grid[r][c] === 1;
+
+      if (isStart) {
+        row.push('S');
+      } else if (isEnd) {
+        row.push('E');
+      } else if (isPath) {
+        row.push('*');
+      } else if (isWall) {
+        row.push('#');
+      } else {
+        row.push('.');
+      }
+    }
+    lines.push(row.join(' '));
+  }
+
+  return lines.join('\n');
 }
