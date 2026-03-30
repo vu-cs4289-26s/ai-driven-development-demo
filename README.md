@@ -50,11 +50,11 @@ gh auth login
 We'll be using a model hosted on [NVIDIA NIM](https://developer.nvidia.com/nim).
 
 1. Go to [build.nvidia.com](https://build.nvidia.com) and sign in
-2. Find the model and grab an API key
+2. Navigate to the **Kimi K2.5** model and grab an API key
 
-### 4. Authenticate OpenCode with NVIDIA NIM
+### 4. Configure OpenCode
 
-Run the following to add your NVIDIA NIM API key to OpenCode:
+Authenticate with your NVIDIA NIM API key:
 
 ```bash
 opencode auth login
@@ -62,7 +62,17 @@ opencode auth login
 
 Select NVIDIA NIM as the provider and paste your API key when prompted.
 
-### 5. Clone and Branch
+### 5. Select the Model
+
+Launch OpenCode:
+
+```bash
+opencode
+```
+
+Type `/models`, search for **Kimi K2.5**, and select it.
+
+### 6. Clone and Branch
 
 ```bash
 git clone <this-repo-url>
@@ -80,12 +90,14 @@ opencode
 
 ### 2. Plan First (Plan Mode)
 
-OpenCode has two modes: **Plan** and **Build**. Start in Plan mode (`ctrl+p` to switch modes) and have the agent read the codebase and think through an approach before writing any code.
+OpenCode has two modes: **Plan** and **Build**. Press `Tab` to switch between them. Start in Plan mode and have the agent read the codebase and think through an approach before writing any code.
+
+> **Tip:** Use `@` to mention files directly in your prompt (e.g. `@PRD.md`, `@pathfinder.js`) so the agent loads them into context.
 
 Example prompts for Plan mode:
 
 ```
-Read PRD.md, pathfinder.js, and pathfinder.test.js. Outline a plan for implementing the BFS pathfinder.
+@PRD.md @pathfinder.js @pathfinder.test.js Outline a plan for implementing the BFS pathfinder.
 ```
 
 ```
@@ -100,7 +112,7 @@ The agent will ask you about the **2 open design decisions** in the PRD. Answer 
 
 ### 3. Build It (Build Mode)
 
-Switch to Build mode (`ctrl+p` → Build) and let the agent implement the solution.
+Switch to Build mode (press `Tab`) and let the agent implement the solution.
 
 Example prompts for Build mode:
 
