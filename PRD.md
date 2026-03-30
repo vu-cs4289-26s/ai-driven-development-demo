@@ -13,7 +13,9 @@ The function signatures are already defined in `pathfinder.js` — your job is t
 | `pathfinder.js` | Function stubs with JSDoc — implement these |
 | `pathfinder.test.js` | Static smoke tests + dynamically generated tests — your implementation must pass these |
 | `test-generator.js` | Runtime test scenario generator with a reference BFS oracle |
-| `package.json` | Run tests with `npm test` |
+| `server.js` | Static file server for the browser visualizer |
+| `visualizer/` | Browser-based BFS visualizer — imports `pathfinder.js` directly |
+| `package.json` | Run tests with `npm test`, launch visualizer with `npm run demo` |
 
 ## Functions to Implement
 
@@ -89,3 +91,11 @@ All tests use Node's built-in test runner (`node:test`). No additional dependenc
 ## Verification
 
 Once all tests pass locally, create a pull request. GitHub Actions CI will run the same tests to verify your implementation.
+
+## Visualizer
+
+```bash
+npm run demo
+```
+
+Opens a browser-based visualizer that imports your `pathfinder.js` directly. You can set grid dimensions, draw walls, place start/end points, and watch BFS explore the grid step by step. The visualizer requires `createGrid()` and `findPath()` to be implemented — it will show an error message until they are.

@@ -10,7 +10,9 @@ A hands-on exercise demonstrating AI-driven development. You'll use an AI coding
 | `pathfinder.js` | Function stubs — the agent will implement these |
 | `pathfinder.test.js` | Static smoke tests + dynamically generated tests (different every run) |
 | `test-generator.js` | Runtime test scenario generator with a reference BFS oracle |
-| `package.json` | Run tests with `npm test` |
+| `server.js` | Static file server for the browser visualizer |
+| `visualizer/` | Browser-based BFS visualizer (grid editor, animation, controls) |
+| `package.json` | Run tests with `npm test`, launch visualizer with `npm run demo` |
 
 ## Prerequisites
 
@@ -146,7 +148,17 @@ npm test
 
 You should see all 75 tests pass (14 static + 60 dynamically generated).
 
-### 6. Create a Pull Request
+### 6. Visualize Your Implementation
+
+Once your implementation passes the tests, launch the browser visualizer:
+
+```bash
+npm run demo
+```
+
+This opens a browser-based tool that imports your `pathfinder.js` directly. You can set grid dimensions, draw walls, place start/end points, and watch BFS explore the grid step by step. The visualizer will not work until `createGrid()` and `findPath()` are properly implemented.
+
+### 7. Create a Pull Request
 
 Ask the agent to open a PR:
 

@@ -1,0 +1,101 @@
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: system-ui, sans-serif;
+  font-size: 13px;
+  background: #f5f5f5;
+  color: #222;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+#controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  background: #fff;
+  border-bottom: 1px solid #ddd;
+  flex-wrap: wrap;
+}
+
+#controls strong {
+  margin-right: 4px;
+}
+
+#controls label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+}
+
+#controls input[type="number"] {
+  width: 52px;
+  padding: 3px 6px;
+  border: 1px solid #ccc;
+  border-radius: 3px;
+  font-size: 13px;
+}
+
+#controls input[type="range"] {
+  width: 80px;
+}
+
+#controls select {
+  padding: 3px 6px;
+  border: 1px solid #ccc;
+  border-radius: 3px;
+  font-size: 13px;
+}
+
+button {
+  padding: 4px 10px;
+  border: 1px solid #ccc;
+  border-radius: 3px;
+  background: #fff;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+button:hover {
+  background: #eee;
+}
+
+button.primary {
+  background: #4a6cf7;
+  color: #fff;
+  border-color: #4a6cf7;
+}
+
+button.primary:hover {
+  background: #3a5be6;
+}
+
+button.primary:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.sep {
+  width: 1px;
+  height: 20px;
+  background: #ddd;
+}
+
+#status {
+  color: #666;
+}
+
+#grid-canvas {
+  flex: 1;
+  display: block;
+  margin: 0 auto;
+  cursor: crosshair;
+}
